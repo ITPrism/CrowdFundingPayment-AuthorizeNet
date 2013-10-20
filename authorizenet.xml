@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension version="3.1" type="plugin" group="crowdfundingpayment" method="upgrade">
+    <name>PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET</name>
+    <author>Todor Iliev</author>
+    <copyright>Copyright (C) 2013 Todor Iliev ( ITPrism.com ). All rights reserved.</copyright>
+    <license>http://www.gnu.org/copyleft/gpl.html GNU/GPL</license>
+    <authorEmail>todor@itprism.com</authorEmail>
+    <authorUrl>http://itprism.com</authorUrl>
+    <version>1.0</version>
+    <creationDate>20 October, 2013</creationDate>
+    <description><![CDATA[
+	<p>CrowdFunding Payment - AuthorizeNet is a plugin that provides functionality for making a payment via Authorize.Net, using Direct Post Method.</p>
+	<p><strong>NOTE</strong>: AuthorizeNet only works with USD in test mode.</p>
+	<p><a href='http://itprism.com/' target='_blank'>Subscribe for the newsletter</a> to receive information about updates and new ITPrism extensions.</p>
+	<p>Please, <a href='http://extensions.joomla.org/extensions/e-commerce/donations/23876' target='_blank'>vote for the extension</a> on Joomla! Extensions Directory</p>
+	]]></description>
+    
+    <languages  folder="language">
+        <language tag="en-GB">en-GB/en-GB.plg_crowdfundingpayment_authorizenet.ini</language>
+        <language tag="en-GB">en-GB/en-GB.plg_crowdfundingpayment_authorizenet.sys.ini</language>
+    </languages> 
+    
+    <files>
+        <filename plugin="authorizenet">authorizenet.php</filename>
+        <filename>index.html</filename>
+		<folder>images</folder>
+		<folder>js</folder>
+    </files>
+    
+    <help url="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_HELP_URL"/>
+    
+    <config>
+		<fields name="params">
+			<fieldset name="basic">
+			
+    	        <field name="authorizenet_login_id" type="text" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_LOGIN_ID" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_LOGIN_ID_DESC" />
+    	        <field name="authorizenet_transaction_key" type="text" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_KEY" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_KEY_DESC" />
+    	        <field name="authorizenet_md5_hash" type="text" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_MD5_HASH" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_MD5_HASH_DESC" />
+                <field name="authorizenet_url" type="text" default="https://secure.authorize.net/gateway/transact.dll" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_LIVE_URL" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_LIVE_URL_DESC" class="span6" />
+                <field name="authorizenet_return_url" type="text" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_RETURN_URL" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_RETURN_URL_DESC" class="span6" />
+                <field name="authorizenet_notify_url" type="text" default="index.php?option=com_crowdfunding&amp;task=notifier.notify&amp;format=raw" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_NOTIFY_URL" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_NOTIFY_URL_DESC" class="span6" />
+                <field name="authorizenet_display_fields" type="radio" default="0" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DISPLAY_FIELDS" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DISPLAY_FIELDS_DESC" class="btn-group" >
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
+                
+                <field name="spacer1" type="spacer" hr="true" />
+                <field name="authorizenet_sandbox" type="radio" default="1" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SANDBOX" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SANDBOX_DESC" class="btn-group">
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
+                <field name="authorizenet_sandbox_url" type="text" default="https://test.authorize.net/gateway/transact.dll" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SANDBOX_URL" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SANDBOX_URL_DESC" class="span6" />
+                
+                <field name="spacer2" type="spacer" hr="true" />
+                <field name="authorizenet_send_admin_mail" type="radio" default="0" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SEND_MAIL_ADMIN" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SEND_MAIL_ADMIN_DESC" class="btn-group">
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
+                <field name="authorizenet_send_user_mail" type="radio" default="0" label="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SEND_MAIL_USER" description="PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_SEND_MAIL_USER_DESC" class="btn-group">
+                    <option value="0">JNO</option>
+                    <option value="1">JYES</option>
+                </field>
+                
+			</fieldset>
+	            
+        </fields>
+	</config>
+</extension>
