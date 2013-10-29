@@ -58,51 +58,72 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         // This is a URI path to the plugin folder
         $pluginURI = "plugins/crowdfundingpayment/authorizenet";
         
-        // Load the script that initialize the select element with banks.
-        if(version_compare(JVERSION, "3", ">=")) {
-            JHtml::_("jquery.framework");
+        $apiLoginId     = JString::trim($this->params->get('authorizenet_login_id'));
+        $transactionKey = JString::trim($this->params->get('authorizenet_transaction_key'));
+        
+        $error = false;
+        if(!$apiLoginId OR !$transactionKey) {
+            $error = true;
         }
-        $doc->addScript($pluginURI."/js/plg_crowdfundingpayment_authorizenet.js");
         
-        $notifyUrl = $this->getNotifyUrl();
-        
-        // Get intention
-        $userId        = JFactory::getUser()->id;
-        $aUserId       = $app->getUserState("auser_id");
-        
-        $intention     = CrowdFundingHelper::getIntention($userId, $aUserId, $item->id);
-        
-        // Prepare custom data
-        $custom = array(
-            "intention_id" =>  $intention->getId(),
-            "gateway"	   =>  "AuthorizeNet"
-        );
-        $custom = base64_encode( json_encode($custom) );
-        
-        $keys = array(
-            "api_login_id"    => JString::trim($this->params->get('authorizenet_login_id')),
-            "transaction_key" => JString::trim($this->params->get('authorizenet_transaction_key'))
-        );
-        
-        jimport("itprism.payment.authorizenet.authorizenet");
-        $authNet = ITPrismPaymentAuthorizeNet::factory("DPM", $keys);
-        /** @var $authNet ITPrismPaymentAuthorizeNetDpm **/
-        
-        $description = JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_INVESTING_IN_S", htmlentities($item->title, ENT_QUOTES, "UTF-8"));
-        
-        $authNet
-            ->setAmount($item->amount)
-            ->setCurrency($item->currencyCode)
-            ->setDescription($description)
-            ->setSequence($intention->getId())
-            ->setRelayUrl($notifyUrl)
-            ->setType("AUTH_CAPTURE")
-            ->setMethod("CC")
-            ->setCustom($custom)
-            ->enableRelayResponse();
+        if(!$error) {
+            
+            // Load the script that initialize the select element with banks.
+            if(version_compare(JVERSION, "3", ">=")) {
+                JHtml::_("jquery.framework");
+            }
+            $doc->addScript($pluginURI."/js/plg_crowdfundingpayment_authorizenet.js");
+            
+            $notifyUrl     = $this->getNotifyUrl();
+            
+            // Get intention
+            $userId        = JFactory::getUser()->id;
+            $aUserId       = $app->getUserState("auser_id");
+            
+            $intention     = CrowdFundingHelper::getIntention($userId, $aUserId, $item->id);
+            
+            // Prepare custom data
+            $custom = array(
+                    "intention_id" =>  $intention->getId(),
+                    "gateway"	   =>  "AuthorizeNet"
+            );
+            $custom = base64_encode( json_encode($custom) );
+            
+            $keys = array(
+                    "api_login_id"    => $apiLoginId,
+                    "transaction_key" => $transactionKey
+            );
+            
+            jimport("itprism.payment.authorizenet.authorizenet");
+            $authNet = ITPrismPaymentAuthorizeNet::factory("DPM", $keys);
+            /** @var $authNet ITPrismPaymentAuthorizeNetDpm **/
+            
+            $description = JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_INVESTING_IN_S", htmlentities($item->title, ENT_QUOTES, "UTF-8"));
+            
+            $authNet
+                ->setAmount($item->amount)
+                ->setCurrency($item->currencyCode)
+                ->setDescription($description)
+                ->setSequence($intention->getId())
+                ->setRelayUrl($notifyUrl)
+                ->setType("AUTH_CAPTURE")
+                ->setMethod("CC")
+                ->setCustom($custom)
+                ->enableRelayResponse();
+            
+            // DEBUG DATA
+            JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DPM_OBJECT"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $authNet) : null;
+            
+        }
         
         $html   =  array();
         $html[] = '<h4><img src="'.$pluginURI.'/images/authorizenet_icon.png" width="50" height="32" alt="AuthorizeNet" />'.JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TITLE").'</h4>';
+        
+        // Check for error with configuration.
+        if($error) {
+            $html[] = '<div class="alert">'.JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_PLUGIN_NOT_CONFIGURED").'</div>';
+            return implode("\n", $html);
+        }
         
         $html[] = '<button class="btn btn-mini" id="js-cfpayment-toggle-fields">'.JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TOGGLE_FIELDS")."</button>";
         
@@ -111,8 +132,6 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         } else {
             $html[] = '<div id="js-cfpayment-authorizenet" style="display: none;">';
         }
-        
-//         $html[] = '<p>'.JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_INFO").'</p>';
         
         if(!$this->params->get('authorizenet_sandbox', 1)) {
             $html[] = '<form action="'.JString::trim($this->params->get('authorizenet_url')).'" method="post">';
@@ -179,6 +198,10 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         
     	$html[] = '</form>';
         
+    	if($this->params->get('authorizenet_display_info', 1)) {
+    	   $html[] = '<p class="sticky">'.JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_INFO").'</p>';
+    	}
+    	
         if($this->params->get('authorizenet_sandbox', 1)) {
             $html[] = '<p class="sticky">'.JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_WORKS_SANDBOX").'</p>';
         }
@@ -217,24 +240,39 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
             return;
         }
         
+        // Load language
+        $this->loadLanguage();
+        
         // Validate request method
         $requestMethod = $app->input->getMethod();
-        
         if(strcmp("POST", $requestMethod) != 0) {
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_REQUEST_METHOD"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_TRANSACTION_REQUEST_METHOD", $requestMethod)
+            );
             return null;
         }
+        
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_RESPONSE"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $_POST) : null;
         
         // Decode custom data
         $custom    = JArrayHelper::getValue($_POST, "custom");
         $custom    = json_decode(base64_decode($custom), true);
         
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_CUSTOM"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $custom) : null;
+        
         // Verify gateway. Is it AuthorizeNet?
         if(!$this->isAuthorizeNetGateway($custom)) {
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_PAYMENT_GATEWAY"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                array("custom" => $custom, "_POST" => $_POST)
+            );
             return null;
         }
-        
-        // Load language
-        $this->loadLanguage();
         
         // Prepare the array that will be returned by this method
         $result = array(
@@ -255,21 +293,36 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         jimport("crowdfunding.intention");
         $intention       = new CrowdFundingIntention($intentionId);
         
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_INTENTION"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $intention->getProperties()) : null;
+        
         // Validate transaction data
         $validData = $this->validateData($_POST, $currency->getAbbr(), $intention);
         if(is_null($validData)) {
             return $result;
         }
         
-        // Check for valid project
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_VALID_DATA"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $validData) : null;
+        
+        // Get project
         jimport("crowdfunding.project");
         $projectId = JArrayHelper::getValue($validData, "project_id");
-        
         $project   = CrowdFundingProject::getInstance($projectId);
+        
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_PROJECT_OBJECT"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $project->getProperties()) : null;
+        
+        // Check for valid project
         if(!$project->getId()) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_PROJECT");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_DATA", var_export($validData, true));
-			JLog::add($error);
+            
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_PROJECT"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                $validData
+            );
+            
 			return $result;
         }
         
@@ -304,6 +357,9 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
             $result["reward"]     = JArrayHelper::toObject($properties);
         }
         
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_RESULT_DATA"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $result) : null;
+        
         // Remove intention
         $intention->delete();
         unset($intention);
@@ -314,12 +370,12 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
     
     /**
      * This metod is executed after complete payment.
-     * It is used to be sent mails to user and administrator
+     * It is used to be sent mails to user and administrator.
      * 
-     * @param object     $transaction   Transaction data
-     * @param JRegistry  $params        Component parameters
-     * @param object     $project       Project data
-     * @param object     $reward        Reward data
+     * @param stdObject  Transaction data
+     * @param JRegistry  Component parameters
+     * @param stdObject  Project data
+     * @param stdObject  Reward data
      */
     public function onAfterPayment($context, &$transaction, $params, $project, $reward) {
         
@@ -352,8 +408,11 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
             
             // Check for an error.
             if ($return !== true) {
-                $error = JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_ADMIN");
-                JLog::add($error);
+                // Log error
+                CrowdFundingLog::add(
+                    JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_ADMIN"),
+                    "AUTHORIZENET_PAYMENT_PLUGIN_ERROR"
+                );
             }
         }
         
@@ -372,8 +431,11 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
     		
     		// Check for an error.
     		if ($return !== true) {
-    		    $error = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_USER");
-    			JLog::add($error);
+    		    // Log error
+    		    CrowdFundingLog::add(
+		            JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_USER"),
+		            "AUTHORIZENET_PAYMENT_PLUGIN_ERROR"
+    		    );
     		}
     		
         }
@@ -413,9 +475,14 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         
         // Check for valid response.
         if(!$authResponse->isAuthorizeNet()) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_RESPONSE");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_RESPONSE_DATA", var_export($authResponse, true));
-            JLog::add($error);
+            
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_RESPONSE"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                $authResponse
+            );
+            
             return null;
         }
         
@@ -447,7 +514,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         if($authResponse->isApproved()) {
             $transaction["txn_status"] = "completed";
         } else {
-            $transaction["txn_status"] = "error";
+            $transaction["txn_status"] = "failed";
             $transaction["extra_data"] = array(
                 "x_response_reason_code" => $authResponse->getResponseReasonCode(),
                 "x_response_reason_text" => $authResponse->getResponseReasonText()
@@ -456,18 +523,27 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         
         // Check Project ID and Transaction ID
         if(!$transaction["project_id"] OR !$transaction["txn_id"]) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_TRANSACTION_DATA");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_DATA", var_export($transaction, true));
-            JLog::add($error);
+            
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_TRANSACTION_DATA"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                $transaction
+            );
+            
             return null;
         }
         
         // Check currency
         if(strcmp($transaction["txn_currency"], $currency) != 0) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_TRANSACTION_CURRENCY");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_DATA", var_export($transaction, true));
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_CURRENCY_DATA", var_export($currency, true));
-            JLog::add($error);
+
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_TRANSACTION_CURRENCY"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                array("TRANSACTION DATA" => $transaction, "CURRENCY" => $currency)
+            );
+            
             return null;
         }
         
@@ -476,6 +552,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
     
     protected function updateReward(&$data) {
         
+        // Get reward.
         jimport("crowdfunding.reward");
         $keys   = array(
         	"id"         => $data["reward_id"], 
@@ -483,11 +560,18 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         );
         $reward = new CrowdFundingReward($keys);
         
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_REWARD_OBJECT"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $reward->getProperties()) : null;
+        
         // Check for valid reward
         if(!$reward->getId()) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_REWARD");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_DATA", var_export($data, true));
-			JLog::add($error);
+            
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_REWARD"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                array("data" => $data, "reward object" => $reward->getProperties())
+            );
 			
 			$data["reward_id"] = 0;
 			return null;
@@ -496,9 +580,13 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         // Check for valida amount between reward value and payed by user
         $txnAmount = JArrayHelper::getValue($data, "txn_amount");
         if($txnAmount < $reward->getAmount()) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_REWARD_AMOUNT");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_DATA", var_export($data, true));
-			JLog::add($error);
+            
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_INVALID_REWARD_AMOUNT"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                array("data" => $data, "reward object" => $reward->getProperties())
+            );
 			
 			$data["reward_id"] = 0;
 			return null;
@@ -506,9 +594,13 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         
         // Verify the availability of rewards
         if($reward->isLimited() AND !$reward->getAvailable()) {
-            $error  = JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_REWARD_NOT_AVAILABLE");
-            $error .= "\n". JText::sprintf("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_TRANSACTION_DATA", var_export($data, true));
-			JLog::add($error);
+            
+            // Log data in the database
+            CrowdFundingLog::add(
+                JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_REWARD_NOT_AVAILABLE"),
+                "AUTHORIZENET_PAYMENT_PLUGIN_ERROR",
+                array("data" => $data, "reward object" => $reward->getProperties())
+            );
 			
 			$data["reward_id"] = 0;
 			return null;
@@ -539,8 +631,10 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         $keys = array(
             "txn_id" => JArrayHelper::getValue($data, "txn_id")
         );
-        
         $transaction = new CrowdFundingTransaction($keys);
+        
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_TRANSACTION_OBJECT"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $transaction->getProperties()) : null;
         
         // Check for existed transaction
         if($transaction->getId()) {
@@ -587,6 +681,9 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
             $notifyPage = JURI::root().str_replace("&", "&amp;", $notifyPage);
         }
         
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_NOTIFY_URL"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $notifyPage) : null;
+        
         return $notifyPage;
         
     }
@@ -598,6 +695,9 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
             $uri        = JURI::getInstance();
             $returnPage = $uri->toString(array("scheme", "host")).JRoute::_(CrowdFundingHelperRoute::getBackingRoute($slug, $catslug, "share"), false);
         } 
+        
+        // DEBUG DATA
+        JDEBUG ? CrowdFundingLog::add(JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_DEBUG_RETURN_URL"), "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG", $returnPage) : null;
         
         return $returnPage;
         
@@ -613,4 +713,5 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
         
         return true;
     }
+    
 }
