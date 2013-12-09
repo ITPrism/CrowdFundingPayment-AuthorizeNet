@@ -813,7 +813,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
     
                 // Log error
                 $this->log->add(
-                    JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_ADMIN"),
+                    JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_PROJECT_OWNER"),
                     "AUTHORIZENET_PAYMENT_PLUGIN_ERROR"
                 );
     
@@ -865,7 +865,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends JPlugin {
     
                 // Log error
                 $this->log->add(
-                    JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_ADMIN"),
+                    JText::_("PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET_ERROR_MAIL_SENDING_USER"),
                     "AUTHORIZENET_PAYMENT_PLUGIN_ERROR"
                 );
     
