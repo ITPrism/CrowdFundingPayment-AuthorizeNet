@@ -1,12 +1,15 @@
 CrowdFunding Payment - AuthorizeNet
 ==========================
-( Version 1.2 )
+( Version 1.3 )
 - - -
 
 This is a payment plugin for CrowdFunding platform, which provides an ability to make payments via Authorize.Net.
 
 Changelog
 ---------
+
+###v1.3
+* Improved
 
 ###v1.2
 * Improved 

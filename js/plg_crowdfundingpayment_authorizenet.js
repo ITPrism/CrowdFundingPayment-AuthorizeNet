@@ -5,5 +5,4 @@ jQuery(document).ready(function() {
 		jQuery('#js-cfpayment-authorizenet').toggle("slow");
 	});
 	
-	
 });
