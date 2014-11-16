@@ -76,15 +76,13 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
 
         // Load the script that initialize the select element with banks.
-        if (version_compare(JVERSION, "3", ">=")) {
-            JHtml::_("jquery.framework");
-        }
+        JHtml::_("jquery.framework");
         $doc->addScript($pluginURI . "/js/plg_crowdfundingpayment_authorizenet.js");
 
         $notifyUrl = $this->getNotifyUrl();
 
         // Get intention
-        $userId  = JFactory::getUser()->id;
+        $userId  = JFactory::getUser()->get("id");
         $aUserId = $app->getUserState("auser_id");
 
         $intention = $this->getIntention(array(
@@ -222,7 +220,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
      *
      * @return null|array
      */
-    public function onPaymenNotify($context, &$params)
+    public function onPaymentNotify($context, &$params)
     {
         if (strcmp("com_crowdfunding.notify.authorizenet", $context) != 0) {
             return null;
@@ -236,7 +234,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         }
 
         $doc = JFactory::getDocument();
-        /**  @var $doc JDocumentHtml * */
+        /**  @var $doc JDocumentHtml */
 
         // Check document type
         $docType = $doc->getType();
@@ -282,6 +280,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             "project"         => null,
             "reward"          => null,
             "transaction"     => null,
+            "payment_session" => null,
             "payment_service" => "authorizenet"
         );
 
@@ -366,6 +365,10 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             $properties       = $reward->getProperties();
             $result["reward"] = JArrayHelper::toObject($properties);
         }
+
+        // Generate data object, based on the intention properties.
+        $properties       = $intention->getProperties();
+        $result["payment_session"] = JArrayHelper::toObject($properties);
 
         // DEBUG DATA
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_RESULT_DATA"), $this->debugType, $result) : null;
