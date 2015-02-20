@@ -3,7 +3,7 @@
  * @package      CrowdFunding
  * @subpackage   Plugins
  * @author       Todor Iliev
- * @copyright    Copyright (C) 2014 Todor Iliev <todor@itprism.com>. All rights reserved.
+ * @copyright    Copyright (C) 2015 Todor Iliev <todor@itprism.com>. All rights reserved.
  * @license      http://www.gnu.org/copyleft/gpl.html GNU/GPL
  */
 
@@ -17,8 +17,6 @@ jimport('crowdfunding.payment.plugin');
  *
  * @package      CrowdFunding
  * @subpackage   Plugins
- *
- * @todo         Use $this->app and $autoloadLanguage to true, when Joomla! 2.5 is not actual anymore.
  */
 class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 {
@@ -26,6 +24,17 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
     protected $textPrefix = "PLG_CROWDFUNDINGPAYMENT_AUTHORIZENET";
     protected $debugType = "AUTHORIZENET_PAYMENT_PLUGIN_DEBUG";
+
+    /**
+     * @var JApplicationSite
+     */
+    protected $app;
+
+    protected $extraDataKeys = array(
+        "x_response_reason_code", "x_response_reason_text", "x_trans_id", "x_method", "x_card_type", "x_account_number",
+        "x_first_name", "x_last_name", "x_company", "x_address", "x_city", "x_state", "x_zip", "x_country",
+        "x_type", "x_amount", "x_tax", "x_duty", "x_freight", "x_tax_exempt", "x_test_request", "custom"
+    );
 
     /**
      * This method prepares a payment gateway - buttons, forms,...
@@ -43,15 +52,12 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             return null;
         }
 
-        $app = JFactory::getApplication();
-        /** @var $app JApplicationSite */
-
-        if ($app->isAdmin()) {
+        if ($this->app->isAdmin()) {
             return null;
         }
 
         $doc = JFactory::getDocument();
-        /**  @var $doc JDocumentHtml * */
+        /**  @var $doc JDocumentHtml */
 
         // Check document type
         $docType = $doc->getType();
@@ -66,6 +72,8 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         $transactionKey = JString::trim($this->params->get('authorizenet_transaction_key'));
 
         $html   = array();
+        $html[] = '<div class="well">'; // Open "well".
+        
         $html[] = '<h4><img src="' . $pluginURI . '/images/authorizenet_icon.png" width="50" height="32" alt="AuthorizeNet" />' . JText::_($this->textPrefix . "_TITLE") . '</h4>';
 
         // Check for error with configuration.
@@ -79,11 +87,12 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         JHtml::_("jquery.framework");
         $doc->addScript($pluginURI . "/js/plg_crowdfundingpayment_authorizenet.js");
 
-        $notifyUrl = $this->getNotifyUrl();
+        $callbackUrl = $this->getCallbackUrl();
+        JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_NOTIFY_URL"), $this->debugType, $callbackUrl) : null;
 
         // Get intention
         $userId  = JFactory::getUser()->get("id");
-        $aUserId = $app->getUserState("auser_id");
+        $aUserId = $this->app->getUserState("auser_id");
 
         $intention = $this->getIntention(array(
             "user_id"    => $userId,
@@ -114,7 +123,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             ->setCurrency($item->currencyCode)
             ->setDescription($description)
             ->setSequence($intention->getId())
-            ->setRelayUrl($notifyUrl)
+            ->setRelayUrl($callbackUrl)
             ->setType("AUTH_CAPTURE")
             ->setMethod("CC")
             ->setCustom($custom)
@@ -122,8 +131,6 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
         // DEBUG DATA
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DPM_OBJECT"), $this->debugType, $authNet) : null;
-
-
 
         $html[] = '<button class="btn btn-mini" id="js-cfpayment-toggle-fields">' . JText::_($this->textPrefix . "_TOGGLE_FIELDS") . "</button>";
 
@@ -199,17 +206,18 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         $html[] = '</form>';
 
         if ($this->params->get('authorizenet_display_info', 1)) {
-            $html[] = '<p class="sticky">' . JText::_($this->textPrefix . "_INFO") . '</p>';
+            $html[] = '<p class="alert alert-info"><i class="icon-info-sign"></i>' . JText::_($this->textPrefix . "_INFO") . '</p>';
         }
 
         if ($this->params->get('authorizenet_sandbox', 1)) {
-            $html[] = '<p class="sticky">' . JText::_($this->textPrefix . "_WORKS_SANDBOX") . '</p>';
+            $html[] = '<p class="alert alert-info"><i class="icon-info-sign"></i>' . JText::_($this->textPrefix . "_WORKS_SANDBOX") . '</p>';
         }
 
         $html[] = '</div>';
 
-        return implode("\n", $html);
+        $html[] = '</div>'; // Close "well".
 
+        return implode("\n", $html);
     }
 
     /**
@@ -226,10 +234,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             return null;
         }
 
-        $app = JFactory::getApplication();
-        /** @var $app JApplicationSite */
-
-        if ($app->isAdmin()) {
+        if ($this->app->isAdmin()) {
             return null;
         }
 
@@ -243,7 +248,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         }
 
         // Validate request method
-        $requestMethod = $app->input->getMethod();
+        $requestMethod = $this->app->input->getMethod();
         if (strcmp("POST", $requestMethod) != 0) {
             $this->log->add(
                 JText::_($this->textPrefix . "_ERROR_INVALID_REQUEST_METHOD"),
@@ -265,7 +270,8 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_CUSTOM"), $this->debugType, $custom) : null;
 
         // Verify gateway. Is it AuthorizeNet?
-        if (!$this->isAuthorizeNetGateway($custom)) {
+        $gateway = JArrayHelper::getValue($custom, "gateway");
+        if (!$this->isValidPaymentGateway($gateway)) {
             $this->log->add(
                 JText::_($this->textPrefix . "_ERROR_INVALID_PAYMENT_GATEWAY"),
                 $this->debugType,
@@ -281,7 +287,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             "reward"          => null,
             "transaction"     => null,
             "payment_session" => null,
-            "payment_service" => "authorizenet"
+            "payment_service" => $this->paymentService
         );
 
         // Get currency
@@ -378,7 +384,6 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         unset($intention);
 
         return $result;
-
     }
 
     /**
@@ -390,19 +395,17 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
      * @param Joomla\Registry\Registry  $params Component parameters
      * @param object $project Project data
      * @param object $reward Reward data
+     * @param object $paymentSession Payment session data.
      *
      * @return null|array
      */
-    public function onAfterPayment($context, &$transaction, &$params, &$project, &$reward)
+    public function onAfterPayment($context, &$transaction, &$params, &$project, &$reward, &$paymentSession)
     {
         if (strcmp("com_crowdfunding.notify.authorizenet", $context) != 0) {
             return;
         }
 
-        $app = JFactory::getApplication();
-        /** @var $app JApplicationSite */
-
-        if ($app->isAdmin()) {
+        if ($this->app->isAdmin()) {
             return null;
         }
 
@@ -420,6 +423,9 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
         // Prepare return page
         $returnUrl = $this->getReturnUrl($project->slug, $project->catslug);
+
+        // Log the URL.
+        JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_RETURN_URL"), $this->debugType, $returnUrl) : null;
 
         echo '<html><head><script>
         <!--
@@ -493,16 +499,13 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             "txn_amount"       => $authResponse->getAmount(),
             "txn_currency"     => $txnCurrency,
             "txn_date"         => $date->toSql(),
+            "extra_data"       => $this->prepareExtraData($data)
         );
 
         if ($authResponse->isApproved()) {
             $transaction["txn_status"] = "completed";
         } else {
             $transaction["txn_status"] = "failed";
-            $transaction["extra_data"] = array(
-                "x_response_reason_code" => $authResponse->getResponseReasonCode(),
-                "x_response_reason_text" => $authResponse->getResponseReasonText()
-            );
         }
 
         // Check Project ID and Transaction ID
@@ -587,51 +590,5 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         $project->updateFunds();
 
         return $transactionData;
-    }
-
-    protected function getNotifyUrl()
-    {
-        $page = JString::trim($this->params->get('authorizenet_notify_url'));
-
-        $uri    = JUri::getInstance();
-        $domain = $uri->toString(array("host"));
-
-        if (false == strpos($page, $domain)) {
-            $page = JURI::root() . str_replace("&", "&amp;", $page);
-        }
-
-        if (false === strpos($page, "payment_service=authorizenet")) {
-            $page .= "&amp;payment_service=authorizenet";
-        }
-
-        // DEBUG DATA
-        JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_NOTIFY_URL"), $this->debugType, $page) : null;
-
-        return $page;
-    }
-
-    protected function getReturnUrl($slug, $catslug)
-    {
-        $returnPage = JString::trim($this->params->get('authorizenet_return_url'));
-        if (!$returnPage) {
-            $uri        = JUri::getInstance();
-            $returnPage = $uri->toString(array("scheme", "host")) . JRoute::_(CrowdFundingHelperRoute::getBackingRoute($slug, $catslug, "share"), false);
-        }
-
-        // DEBUG DATA
-        JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_RETURN_URL"), $this->debugType, $returnPage) : null;
-
-        return $returnPage;
-    }
-
-    protected function isAuthorizeNetGateway($custom)
-    {
-        $paymentGateway = JArrayHelper::getValue($custom, "gateway");
-
-        if (strcmp("AuthorizeNet", $paymentGateway) != 0) {
-            return false;
-        }
-
-        return true;
     }
 }
