@@ -1,6 +1,6 @@
 <?php
 /**
- * @package      CrowdFunding
+ * @package      Crowdfunding
  * @subpackage   Plugins
  * @author       Todor Iliev
  * @copyright    Copyright (C) 2015 Todor Iliev <todor@itprism.com>. All rights reserved.
@@ -10,15 +10,17 @@
 // no direct access
 defined('_JEXEC') or die;
 
-jimport('crowdfunding.payment.plugin');
+jimport("Prism.init");
+jimport("Crowdfunding.init");
+jimport("EmailTemplates.init");
 
 /**
- * CrowdFunding AuthorizeNet Payment Plugin
+ * Crowdfunding AuthorizeNet Payment Plugin
  *
- * @package      CrowdFunding
+ * @package      Crowdfunding
  * @subpackage   Plugins
  */
-class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
+class plgCrowdfundingPaymentAuthorizeNet extends Crowdfunding\Payment\Plugin
 {
     protected $paymentService = "authorizenet";
 
@@ -68,8 +70,8 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         // This is a URI path to the plugin folder
         $pluginURI = "plugins/crowdfundingpayment/authorizenet";
 
-        $apiLoginId     = JString::trim($this->params->get('authorizenet_login_id'));
-        $transactionKey = JString::trim($this->params->get('authorizenet_transaction_key'));
+        $apiLoginId     = Joomla\String\String::trim($this->params->get('authorizenet_login_id'));
+        $transactionKey = Joomla\String\String::trim($this->params->get('authorizenet_transaction_key'));
 
         $html   = array();
         $html[] = '<div class="well">'; // Open "well".
@@ -90,20 +92,19 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         $callbackUrl = $this->getCallbackUrl();
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_NOTIFY_URL"), $this->debugType, $callbackUrl) : null;
 
-        // Get intention
-        $userId  = JFactory::getUser()->get("id");
-        $aUserId = $this->app->getUserState("auser_id");
+        // Get payment session
 
-        $intention = $this->getIntention(array(
-            "user_id"    => $userId,
-            "auser_id"   => $aUserId,
-            "project_id" => $item->id
+        $paymentSessionContext    = Crowdfunding\Constants::PAYMENT_SESSION_CONTEXT . $item->id;
+        $paymentSessionLocal      = $this->app->getUserState($paymentSessionContext);
+
+        $paymentSession = $this->getPaymentSession(array(
+            "session_id"    => $paymentSessionLocal->session_id
         ));
 
         // Prepare custom data
         $custom = array(
-            "intention_id" => $intention->getId(),
-            "gateway"      => "AuthorizeNet"
+            "payment_session_id" => $paymentSession->getId(),
+            "gateway"            => "AuthorizeNet"
         );
         $custom = base64_encode(json_encode($custom));
 
@@ -112,9 +113,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             "transaction_key" => $transactionKey
         );
 
-        jimport("itprism.payment.authorizenet.authorizenet");
-        $authNet = ITPrismPaymentAuthorizeNet::factory("DPM", $keys);
-        /** @var $authNet ITPrismPaymentAuthorizeNetDpm */
+        $authNet = new Prism\Payment\AuthorizeNet\Service\Dpm($keys);
 
         $description = JText::sprintf($this->textPrefix . "_INVESTING_IN_S", htmlentities($item->title, ENT_QUOTES, "UTF-8"));
 
@@ -122,7 +121,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
             ->setAmount($item->amount)
             ->setCurrency($item->currencyCode)
             ->setDescription($description)
-            ->setSequence($intention->getId())
+            ->setSequence($paymentSession->getId())
             ->setRelayUrl($callbackUrl)
             ->setType("AUTH_CAPTURE")
             ->setMethod("CC")
@@ -132,7 +131,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         // DEBUG DATA
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DPM_OBJECT"), $this->debugType, $authNet) : null;
 
-        $html[] = '<button class="btn btn-mini" id="js-cfpayment-toggle-fields">' . JText::_($this->textPrefix . "_TOGGLE_FIELDS") . "</button>";
+        $html[] = '<button type="button" class="btn btn-default btn-xs" id="js-cfpayment-toggle-fields">' . JText::_($this->textPrefix . "_TOGGLE_FIELDS") . "</button>";
 
         if ($this->params->get("authorizenet_display_fields", 0)) {
             $html[] = '<div id="js-cfpayment-authorizenet">';
@@ -141,10 +140,10 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         }
 
         if (!$this->params->get('authorizenet_sandbox', 1)) {
-            $html[] = '<form action="' . JString::trim($this->params->get('authorizenet_url')) . '" method="post" autocomplete="off">';
+            $html[] = '<form action="' . Joomla\String\String::trim($this->params->get('authorizenet_url')) . '" method="post" autocomplete="off">';
             $authNet->disableTestMode();
         } else {
-            $html[] = '<form action="' . JString::trim($this->params->get('authorizenet_sandbox_url')) . '" method="post" autocomplete="off">';
+            $html[] = '<form action="' . Joomla\String\String::trim($this->params->get('authorizenet_sandbox_url')) . '" method="post" autocomplete="off">';
             $authNet->enableTestMode();
         }
 
@@ -153,51 +152,51 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         $html = array_merge($html, $hiddenFields);
 
         $html[] = '<fieldset>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_CREDIT_CARD_NUMBER") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_card_num" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_card_num">' . JText::_($this->textPrefix . "_CREDIT_CARD_NUMBER").'</label>';
+        $html[] = '     <input type="text" name="x_card_num" id="x_card_num" value="" class="form-control" />';
         $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_EXPIRES") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_exp_date" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_exp_date">' . JText::_($this->textPrefix . "_EXPIRES") . '</label>';
+        $html[] = '     <input type="text" name="x_exp_date" value="" class="form-control" />';
         $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_CCV") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_card_code" value="" /></div>';
-        $html[] = '</div>';
-        $html[] = '</fieldset>';
-
-        $html[] = '<fieldset>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_FIRST_NAME") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_first_name" value="" /></div>';
-        $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_LAST_NAME") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_last_name" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_card_code">' . JText::_($this->textPrefix . "_CCV") . '</label>';
+        $html[] = '     <div class="controls"><input type="text" name="x_card_code" value="" class="form-control" />';
         $html[] = '</div>';
         $html[] = '</fieldset>';
 
         $html[] = '<fieldset>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_ADDRESS") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_address" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_first_name">' . JText::_($this->textPrefix . "_FIRST_NAME") . '</label>';
+        $html[] = '     <input type="text" name="x_first_name" value="" class="form-control" />';
         $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_CITY") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_city" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_last_name">' . JText::_($this->textPrefix . "_LAST_NAME") . '</label>';
+        $html[] = '     <input type="text" name="x_last_name" value="" class="form-control" />';
         $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_STATE") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_state" value="" /></div>';
+        $html[] = '</fieldset>';
+
+        $html[] = '<fieldset>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_address">' . JText::_($this->textPrefix . "_ADDRESS") . '</label>';
+        $html[] = '     <input type="text" name="x_address" value="" class="form-control" />';
         $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_ZIP_CODE") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_zip" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_city">' . JText::_($this->textPrefix . "_CITY") . '</label>';
+        $html[] = '     <input type="text" name="x_city" value="" class="form-control" />';
         $html[] = '</div>';
-        $html[] = '<div class="control-group">';
-        $html[] = '     <div class="control-label">' . JText::_($this->textPrefix . "_COUNTRY") . '</div>';
-        $html[] = '     <div class="controls"><input type="text" name="x_country" value="" /></div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_state">' . JText::_($this->textPrefix . "_STATE") . '</label>';
+        $html[] = '     <input type="text" name="x_state" value="" class="form-control" />';
+        $html[] = '</div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_zip">' . JText::_($this->textPrefix . "_ZIP_CODE") . '</label>';
+        $html[] = '     <input type="text" name="x_zip" value="" class="form-control" />';
+        $html[] = '</div>';
+        $html[] = '<div class="form-group">';
+        $html[] = '     <label for="x_country">' . JText::_($this->textPrefix . "_COUNTRY") . '</label>';
+        $html[] = '     <input type="text" name="x_country" value="" class="form-control" />';
         $html[] = '</div>';
         $html[] = '</fieldset>';
 
@@ -206,11 +205,11 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         $html[] = '</form>';
 
         if ($this->params->get('authorizenet_display_info', 1)) {
-            $html[] = '<p class="alert alert-info"><i class="icon-info-sign"></i>' . JText::_($this->textPrefix . "_INFO") . '</p>';
+            $html[] = '<p class="bg-info p-10-5 mt-10"><span class="glyphicon glyphicon-info-sign"></span> ' . JText::_($this->textPrefix . "_INFO") . '</p>';
         }
 
         if ($this->params->get('authorizenet_sandbox', 1)) {
-            $html[] = '<p class="alert alert-info"><i class="icon-info-sign"></i>' . JText::_($this->textPrefix . "_WORKS_SANDBOX") . '</p>';
+            $html[] = '<p class="bg-info p-10-5"><span class="glyphicon glyphicon-info-sign"></span> ' . JText::_($this->textPrefix . "_WORKS_SANDBOX") . '</p>';
         }
 
         $html[] = '</div>';
@@ -263,14 +262,14 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_RESPONSE"), $this->debugType, $_POST) : null;
 
         // Decode custom data
-        $custom = JArrayHelper::getValue($_POST, "custom");
+        $custom = Joomla\Utilities\ArrayHelper::getValue($_POST, "custom");
         $custom = json_decode(base64_decode($custom), true);
 
         // DEBUG DATA
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_CUSTOM"), $this->debugType, $custom) : null;
 
         // Verify gateway. Is it AuthorizeNet?
-        $gateway = JArrayHelper::getValue($custom, "gateway");
+        $gateway = Joomla\Utilities\ArrayHelper::getValue($custom, "gateway");
         if (!$this->isValidPaymentGateway($gateway)) {
             $this->log->add(
                 JText::_($this->textPrefix . "_ERROR_INVALID_PAYMENT_GATEWAY"),
@@ -291,22 +290,19 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         );
 
         // Get currency
-        jimport("crowdfunding.currency");
         $currencyId = $params->get("project_currency");
-        $currency   = CrowdFundingCurrency::getInstance(JFactory::getDbo(), $currencyId, $params);
+        $currency   = Crowdfunding\Currency::getInstance(JFactory::getDbo(), $currencyId, $params);
 
-        // Get intention data
-        $intentionId = JArrayHelper::getValue($custom, "intention_id", 0, "int");
+        // Get payment session.
+        $paymentSessionId = Joomla\Utilities\ArrayHelper::getValue($custom, "payment_session_id", 0, "int");
 
-        jimport("crowdfunding.intention");
-        $intention = new CrowdFundingIntention(JFactory::getDbo());
-        $intention->load($intentionId);
+        $paymentSession = $this->getPaymentSession(array("id" => $paymentSessionId));
 
         // DEBUG DATA
-        JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_INTENTION"), $this->debugType, $intention->getProperties()) : null;
+        JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_PAYMENT_SESSION"), $this->debugType, $paymentSession->getProperties()) : null;
 
         // Validate transaction data
-        $validData = $this->validateData($_POST, $currency->getAbbr(), $intention);
+        $validData = $this->validateData($_POST, $currency->getCode(), $paymentSession);
         if (is_null($validData)) {
             return $result;
         }
@@ -315,9 +311,8 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_VALID_DATA"), $this->debugType, $validData) : null;
 
         // Get project
-        jimport("crowdfunding.project");
-        $projectId = JArrayHelper::getValue($validData, "project_id");
-        $project   = CrowdFundingProject::getInstance(JFactory::getDbo(), $projectId);
+        $projectId = Joomla\Utilities\ArrayHelper::getValue($validData, "project_id");
+        $project   = Crowdfunding\Project::getInstance(JFactory::getDbo(), $projectId);
 
         // DEBUG DATA
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_PROJECT_OBJECT"), $this->debugType, $project->getProperties()) : null;
@@ -347,7 +342,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
         }
 
         // Update the number of distributed reward.
-        $rewardId = JArrayHelper::getValue($transactionData, "reward_id");
+        $rewardId = Joomla\Utilities\ArrayHelper::getValue($transactionData, "reward_id");
         $reward   = null;
         if (!empty($rewardId)) {
             $reward = $this->updateReward($transactionData);
@@ -360,28 +355,28 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
         //  Prepare the data that will be returned
 
-        $result["transaction"] = JArrayHelper::toObject($transactionData);
+        $result["transaction"] = Joomla\Utilities\ArrayHelper::toObject($transactionData);
 
         // Generate object of data based on the project properties
         $properties        = $project->getProperties();
-        $result["project"] = JArrayHelper::toObject($properties);
+        $result["project"] = Joomla\Utilities\ArrayHelper::toObject($properties);
 
         // Generate object of data based on the reward properties
         if (!empty($reward)) {
             $properties       = $reward->getProperties();
-            $result["reward"] = JArrayHelper::toObject($properties);
+            $result["reward"] = Joomla\Utilities\ArrayHelper::toObject($properties);
         }
 
-        // Generate data object, based on the intention properties.
-        $properties       = $intention->getProperties();
-        $result["payment_session"] = JArrayHelper::toObject($properties);
+        // Generate data object, based on the payment session properties.
+        $properties       = $paymentSession->getProperties();
+        $result["payment_session"] = Joomla\Utilities\ArrayHelper::toObject($properties);
 
         // DEBUG DATA
         JDEBUG ? $this->log->add(JText::_($this->textPrefix . "_DEBUG_RESULT_DATA"), $this->debugType, $result) : null;
 
-        // Remove intention
-        $intention->delete();
-        unset($intention);
+        // Remove payment session.
+        $txnStatus = (isset($result["transaction"]->txn_status)) ? $result["transaction"]->txn_status : null;
+        $this->closePaymentSession($paymentSession, $txnStatus);
 
         return $result;
     }
@@ -441,21 +436,19 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
      *
      * @param array  $data
      * @param string $currency
-     * @param object  $intention
+     * @param Crowdfunding\Payment\Session  $paymentSession
      *
      * @return null|array
      *
      * @todo It must be tested with international transaction ( currency other than USD ),
      * bacause the response in test mode does not return currency value ( x_currency_code ).
      */
-    protected function validateData($data, $currency, $intention)
+    protected function validateData($data, $currency, $paymentSession)
     {
-        jimport("itprism.payment.authorizenet.authorizenetresponse");
+        $authResponse = new Prism\Payment\AuthorizeNet\Response($data);
 
-        $authResponse = new ITPrismPaymentAuthorizeNetResponse($data);
-
-        $apiLoginId = JString::trim($this->params->get("authorizenet_login_id"));
-        $md5Setting = JString::trim($this->params->get("authorizenet_md5_hash"));
+        $apiLoginId = Joomla\String\String::trim($this->params->get("authorizenet_login_id"));
+        $md5Setting = Joomla\String\String::trim($this->params->get("authorizenet_md5_hash"));
 
         $authResponse->setApiLoginId($apiLoginId);
         $authResponse->setMd5Setting($md5Setting);
@@ -481,8 +474,7 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
         // If it is test mode, set fake transaction ID.
         if ($this->params->get("authorizenet_sandbox", 0)) {
-            jimport("itprism.string");
-            $transactionId = new ITPrismString();
+            $transactionId = new Prism\String();
             $transactionId->generateRandomString(10, "TEST");
 
             $authResponse->setTransactionId((string)$transactionId);
@@ -491,9 +483,9 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
         // Prepare transaction data
         $transaction = array(
-            "investor_id"      => (int)$intention->getUserId(),
-            "project_id"       => (int)$intention->getProjectId(),
-            "reward_id"        => ($intention->isAnonymous()) ? 0 : (int)$intention->getRewardId(),
+            "investor_id"      => (int)$paymentSession->getUserId(),
+            "project_id"       => (int)$paymentSession->getProjectId(),
+            "reward_id"        => ($paymentSession->isAnonymous()) ? 0 : (int)$paymentSession->getRewardId(),
             "service_provider" => "AuthorizeNet",
             "txn_id"           => $authResponse->getTransactionId(),
             "txn_amount"       => $authResponse->getAmount(),
@@ -541,18 +533,17 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
      * Save transaction
      *
      * @param array               $transactionData
-     * @param CrowdFundingProject $project
+     * @param Crowdfunding\Project $project
      *
      * @return null|array
      */
     protected function storeTransaction($transactionData, $project)
     {
         // Get transaction by txn ID
-        jimport("crowdfunding.transaction");
         $keys        = array(
-            "txn_id" => JArrayHelper::getValue($transactionData, "txn_id")
+            "txn_id" => Joomla\Utilities\ArrayHelper::getValue($transactionData, "txn_id")
         );
-        $transaction = new CrowdFundingTransaction(JFactory::getDbo());
+        $transaction = new Crowdfunding\Transaction(JFactory::getDbo());
         $transaction->load($keys);
 
         // DEBUG DATA
@@ -585,9 +576,9 @@ class plgCrowdFundingPaymentAuthorizeNet extends CrowdFundingPaymentPlugin
 
         // If the new transaction is completed,
         // update project funded amount.
-        $amount = JArrayHelper::getValue($transactionData, "txn_amount");
+        $amount = Joomla\Utilities\ArrayHelper::getValue($transactionData, "txn_amount");
         $project->addFunds($amount);
-        $project->updateFunds();
+        $project->storeFunds();
 
         return $transactionData;
     }
